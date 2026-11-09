@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e4620">
+<title>Asistencia GP</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root { --verde:#1e4620; --verde2:#2e7d32; --claro:#e8f5e9; --rojo:#c62828; --ambar:#ef6c00; --gris:#f3f5f4; }
+  * { box-sizing:border-box; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  body { margin:0; background:var(--gris); color:#222; }
+  header { background:var(--verde); color:#fff; padding:14px 16px 12px; position:sticky; top:0; z-index:5; }
+  header h1 { margin:0; font-size:1.05rem; }
+  header .sub { font-size:.78rem; opacity:.85; margin-top:2px; display:flex; justify-content:space-between; }
+  main { max-width:480px; margin:0 auto; padding:12px; }
+  .card { background:#fff; border-radius:14px; padding:14px; box-shadow:0 2px 8px rgba(0,0,0,.06); margin-bottom:12px; }
+  #reader { width:100%; border-radius:12px; overflow:hidden; background:#000; min-height:240px; }
+  #reader video { border-radius:12px; }
+  .estado { text-align:center; font-size:.9rem; margin-top:10px; min-height:1.3em; }
+  .resultado { display:none; border-radius:12px; padding:14px; text-align:center; margin-top:10px; color:#fff; }
+  .resultado.ok { background:var(--verde2); display:block; }
+  .resultado.dup { background:var(--ambar); display:block; }
+  .resultado.err { background:var(--rojo); display:block; }
+  .resultado .nombre { font-size:1.25rem; font-weight:700; }
+  .resultado .det { font-size:.85rem; opacity:.95; margin-top:4px; }
+  .fila { display:flex; gap:8px; align-items:center; justify-content:space-between; font-size:.8rem; color:#555; margin-top:10px; }
+  .pill { background:var(--claro); color:var(--verde2); border-radius:20px; padding:4px 10px; font-weight:600; }
+  .pill.warn { background:#fff3e0; color:var(--ambar); }
+  input[type=text], input[type=password], input[type=tel] { width:100%; padding:11px; border:1px solid #ccc; border-radius:9px; font-size:.95rem; margin-top:4px; }
+  label { font-size:.78rem; font-weight:700; color:#444; }
+  button { border:0; border-radius:10px; padding:12px 14px; font-size:.95rem; font-weight:600; cursor:pointer; }
+  .btn { background:var(--verde2); color:#fff; width:100%; margin-top:10px; }
+  .btn.sec { background:#fff; color:var(--verde2); border:1px solid var(--verde2); }
+  h2 { font-size:.9rem; margin:0 0 8px; color:var(--verde); display:flex; justify-content:space-between; }
+  ul { list-style:none; margin:0; padding:0; }
+  li { padding:9px 4px; border-bottom:1px solid #eee; font-size:.88rem; display:flex; justify-content:space-between; align-items:center; }
+  li:last-child { border-bottom:0; }
+  li .h { font-size:.75rem; color:#777; }
+  li.pend { color:#555; }
+  li.pend button { padding:5px 10px; font-size:.75rem; background:#fff; border:1px solid #bbb; color:#444; }
+  .oculto { display:none !important; }
+  .tabs { display:flex; gap:6px; margin-bottom:8px; }
+  .tabs button { flex:1; padding:8px; font-size:.8rem; background:#eee; color:#444; }
+  .tabs button.act { background:var(--verde2); color:#fff; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Control de Asistencia · Greenpark</h1>
+  <div class="sub"><span id="hoy">—</span><span id="contador">—</span></div>
+</header>
+
+<main>
+  <!-- Configuración inicial (solo la primera vez) -->
+  <section id="config" class="card oculto">
+    <h2>Configurar este celular</h2>
+    <label for="pinInput">PIN de la obra</label>
+    <input id="pinInput" type="password" inputmode="numeric" placeholder="PIN entregado por administración">
+    <button class="btn" id="guardarPin">Guardar y empezar</button>
+    <div class="estado" id="configMsg"></div>
+  </section>
+
+  <!-- Escáner -->
+  <section id="escaner" class="card oculto">
+    <div id="reader"></div>
+    <div class="estado" id="estado">Iniciando cámara…</div>
+    <div class="resultado" id="resultado"><div class="nombre" id="resNombre"></div><div class="det" id="resDet"></div></div>
+    <div class="fila">
+      <span>📍 <span id="gps">Buscando GPS…</span></span>
+      <span class="pill oculto" id="cola"></span>
+    </div>
+    <div style="margin-top:10px">
+      <label for="obsInput">Observación para el próximo escaneo (opcional)</label>
+      <input id="obsInput" type="text" placeholder="Ej. llegó tarde, permiso 2 horas…">
+    </div>
+  </section>
+
+  <!-- Listas del día -->
+  <section id="listas" class="card oculto">
+    <div class="tabs">
+      <button id="tabPend" class="act">Pendientes</button>
+      <button id="tabMarc">Marcados</button>
+    </div>
+    <ul id="listaPend"></ul>
+    <ul id="listaMarc" class="oculto"></ul>
+    <button class="btn sec" id="actualizar">Actualizar lista</button>
+  </section>
+</main>
+
+<script>
+/* ====== CONFIGURACIÓN: pega aquí la URL /exec de la implementación ====== */
+const API_URL = 'https://script.google.com/macros/s/AKfycbzrSUksU1rkpSsI_VwaTiBJ1S7aenzEhmvjiIHwYVzsS36Ryge1j0QGGTiFyWwViSvd/exec';
+/* ======================================================================= */
+
+const $ = id => document.getElementById(id);
+let PIN = localStorage.getItem('gp_pin') || '';
+let lat = null, lng = null;
+let pausa = false;
+let trabajadores = [];        // nombres de Plantilla
+let marcados = new Map();     // nombre normalizado -> {nombre, hora}
+let ultimo = { clave: '', t: 0 };
+
+const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/^\s*\d+\s*[.)-]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+$('hoy').textContent = new Date().toLocaleDateString('es-EC', { weekday:'long', day:'2-digit', month:'2-digit', year:'numeric' });
+
+/* ---------- Arranque ---------- */
+if (!PIN) { $('config').classList.remove('oculto'); }
+else iniciar();
+
+$('guardarPin').onclick = async () => {
+  const pin = $('pinInput').value.trim();
+  if (!pin) return;
+  $('configMsg').textContent = 'Verificando…';
+  try {
+    const r = await obtenerLista(pin);
+    if (!r.exito) { $('configMsg').textContent = r.mensaje || 'PIN incorrecto'; return; }
+    PIN = pin; localStorage.setItem('gp_pin', pin);
+    $('config').classList.add('oculto');
+    aplicarLista(r);
+    iniciar();
+  } catch (e) {
+    $('configMsg').textContent = 'Sin conexión con el servidor. Revisa internet.';
+  }
+};
+
+function iniciar() {
+  $('escaner').classList.remove('oculto');
+  $('listas').classList.remove('oculto');
+  iniciarGPS();
+  iniciarCamara();
+  refrescarLista();
+  procesarCola();
+  setInterval(procesarCola, 20000);
+  window.addEventListener('online', procesarCola);
+}
+
+/* ---------- GPS ---------- */
+function iniciarGPS() {
+  if (!navigator.geolocation) { $('gps').textContent = 'GPS no disponible'; return; }
+  navigator.geolocation.watchPosition(p => {
+    lat = p.coords.latitude.toFixed(6); lng = p.coords.longitude.toFixed(6);
+    $('gps').textContent = `±${Math.round(p.coords.accuracy)} m`;
+  }, () => { $('gps').textContent = 'Activa la ubicación'; },
+  { enableHighAccuracy:true, maximumAge:30000, timeout:15000 });
+}
+
+/* ---------- Cámara ---------- */
+function iniciarCamara() {
+  const qr = new Html5Qrcode('reader');
+  qr.start({ facingMode:'environment' }, { fps:10, qrbox:{ width:230, height:230 } }, alLeer)
+    .then(() => $('estado').textContent = 'Apunta al QR del carnet')
+    .catch(() => $('estado').textContent = '⚠️ Permite el acceso a la cámara y recarga la página');
+}
+
+function alLeer(texto) {
+  const nombre = String(texto || '').trim();
+  const clave = norm(nombre);
+  const ahora = Date.now();
+  if (pausa) return;
+  if (clave === ultimo.clave && ahora - ultimo.t < 5000) return;   // mismo QR frente a la cámara
+  ultimo = { clave, t: ahora };
+
+  // Validación inmediata con la lista descargada
+  if (trabajadores.length && !trabajadores.some(n => norm(n) === clave)) {
+    mostrar('err', nombre, 'No está en la lista de trabajadores (Plantilla)');
+    sonido(false); return;
+  }
+  if (marcados.has(clave)) {
+    mostrar('dup', nombre, 'Ya registrado hoy a las ' + marcados.get(clave).hora);
+    sonido(false); return;
+  }
+  registrar(nombre, $('obsInput').value.trim());
+}
+
+/* ---------- Registro ---------- */
+async function registrar(nombre, obs) {
+  pausa = true;
+  const reg = { clave: PIN, nombre, lat, lng, obs, ts: new Date().toISOString() };
+  const hora = new Date().toLocaleTimeString('es-EC', { hour:'2-digit', minute:'2-digit' });
+  marcados.set(norm(nombre), { nombre, hora });  // marca local inmediata
+  pintarListas();
+  $('obsInput').value = '';
+  try {
+    const r = await enviar(reg);
+    if (r.exito) {
+      marcados.set(norm(r.nombre), { nombre: r.nombre, hora: r.hora });
+      mostrar(r.duplicado ? 'dup' : 'ok', r.nombre, r.duplicado ? 'Ya estaba registrado hoy' : '✔ Asistencia registrada · ' + r.hora);
+      sonido(!r.duplicado);
+    } else {
+      marcados.delete(norm(nombre));
+      mostrar('err', nombre, r.mensaje || 'No se pudo registrar');
+      sonido(false);
+    }
+  } catch (e) {
+    guardarEnCola(reg);
+    mostrar('dup', nombre, 'Sin señal: guardado en el celular, se enviará solo · ' + hora);
+    sonido(true);
+  }
+  pintarListas();
+  setTimeout(() => { pausa = false; }, 1500);
+}
+
+function enviar(reg) {
+  // text/plain evita la verificación CORS previa; Apps Script responde JSON
+  return fetch(API_URL, { method:'POST', body: JSON.stringify(reg), redirect:'follow' })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+}
+
+/* ---------- Cola sin conexión ---------- */
+function leerCola() { try { return JSON.parse(localStorage.getItem('gp_cola') || '[]'); } catch { return []; } }
+function guardarEnCola(reg) { const c = leerCola(); c.push(reg); localStorage.setItem('gp_cola', JSON.stringify(c)); pintarCola(); }
+function pintarCola() {
+  const n = leerCola().length;
+  $('cola').classList.toggle('oculto', n === 0);
+  $('cola').className = 'pill warn' + (n ? '' : ' oculto');
+  $('cola').textContent = n + ' pendiente(s) de enviar';
+}
+let enviandoCola = false;
+async function procesarCola() {
+  if (enviandoCola) return;
+  let cola = leerCola();
+  if (!cola.length) { pintarCola(); return; }
+  enviandoCola = true;
+  const restantes = [];
+  for (const reg of cola) {
+    try { const r = await enviar(reg); if (!r.exito && /PIN/.test(r.mensaje || '')) restantes.push(reg); }
+    catch { restantes.push(reg); }
+  }
+  localStorage.setItem('gp_cola', JSON.stringify(restantes));
+  enviandoCola = false;
+  pintarCola();
+  if (restantes.length < cola.length) refrescarLista();
+}
+
+/* ---------- Lista del día ---------- */
+function obtenerLista(pin) {
+  return fetch(API_URL + '?accion=lista&clave=' + encodeURIComponent(pin)).then(r => r.json());
+}
+async function refrescarLista() {
+  try {
+    const r = await obtenerLista(PIN);
+    if (!r.exito) {
+      if (/PIN/.test(r.mensaje || '')) { localStorage.removeItem('gp_pin'); location.reload(); }
+      return;
+    }
+    aplicarLista(r);
+  } catch (e) { /* sin conexión: se mantiene la lista local */ }
+}
+function aplicarLista(r) {
+  trabajadores = r.trabajadores || [];
+  localStorage.setItem('gp_trab', JSON.stringify(trabajadores));
+  (r.marcados || []).forEach(n => { if (!marcados.has(norm(n))) marcados.set(norm(n), { nombre:n, hora:'—' }); });
+  pintarListas();
+}
+function pintarListas() {
+  if (!trabajadores.length) trabajadores = JSON.parse(localStorage.getItem('gp_trab') || '[]');
+  const pend = trabajadores.filter(n => !marcados.has(norm(n)));
+  $('contador').textContent = `${trabajadores.length - pend.length}/${trabajadores.length} presentes`;
+  $('listaPend').innerHTML = pend.length ? '' : '<li>Todos registrados ✔</li>';
+  pend.forEach(n => {
+    const li = document.createElement('li'); li.className = 'pend';
+    li.innerHTML = `<span>${n}</span>`;
+    const b = document.createElement('button'); b.textContent = 'Sin carnet';
+    b.onclick = () => {
+      const motivo = prompt(`Registrar a ${n} SIN QR.\nEscribe el motivo:`, 'Olvidó el carnet');
+      if (motivo !== null) registrar(n, 'Registro manual: ' + (motivo || 'sin motivo'));
+    };
+    li.appendChild(b); $('listaPend').appendChild(li);
+  });
+  $('listaMarc').innerHTML = '';
+  [...marcados.values()].forEach(m => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span>${m.nombre}</span><span class="h">${m.hora}</span>`;
+    $('listaMarc').appendChild(li);
+  });
+}
+$('tabPend').onclick = () => { $('tabPend').classList.add('act'); $('tabMarc').classList.remove('act'); $('listaPend').classList.remove('oculto'); $('listaMarc').classList.add('oculto'); };
+$('tabMarc').onclick = () => { $('tabMarc').classList.add('act'); $('tabPend').classList.remove('act'); $('listaMarc').classList.remove('oculto'); $('listaPend').classList.add('oculto'); };
+$('actualizar').onclick = refrescarLista;
+
+/* ---------- Avisos ---------- */
+function mostrar(tipo, nombre, det) {
+  const el = $('resultado');
+  el.className = 'resultado ' + tipo;
+  $('resNombre').textContent = nombre;
+  $('resDet').textContent = det;
+  $('estado').textContent = 'Listo para el siguiente';
+}
+function sonido(ok) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = ok ? 950 : 300; g.gain.value = 0.15;
+    o.start(); o.stop(ctx.currentTime + (ok ? 0.15 : 0.4));
+  } catch (e) {}
+  if (navigator.vibrate) navigator.vibrate(ok ? 120 : [80, 60, 80]);
+}
+
+pintarCola();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>

@@ -45,6 +45,7 @@
   li:last-child { border-bottom:0; }
   li .h { font-size:.75rem; color:#777; }
   li.pend { color:#555; }
+  li button.anular { padding:5px 10px; font-size:.75rem; background:#fff; border:1px solid #e57373; color:var(--rojo); }
   li.pend button { padding:5px 10px; font-size:.75rem; background:#fff; border:1px solid #bbb; color:#444; }
   .oculto { display:none !important; }
   .tabs { display:flex; gap:6px; margin-bottom:8px; }
@@ -279,12 +280,36 @@ function pintarListas() {
     li.appendChild(b); $('listaPend').appendChild(li);
   });
   $('listaMarc').innerHTML = '';
+  if (!marcados.size) $('listaMarc').innerHTML = '<li>Nadie registrado todavía</li>';
   [...marcados.values()].forEach(m => {
     const li = document.createElement('li');
-    li.innerHTML = `<span>${m.nombre}</span><span class="h">${m.hora}</span>`;
-    $('listaMarc').appendChild(li);
+    li.innerHTML = `<span>${m.nombre}<br><span class="h">${m.hora}</span></span>`;
+    const b = document.createElement('button'); b.textContent = 'Anular'; b.className = 'anular';
+    b.onclick = () => anular(m.nombre);
+    li.appendChild(b); $('listaMarc').appendChild(li);
   });
 }
+/* ---------- Anular un escaneo hecho por error (solo hoy) ---------- */
+async function anular(nombre) {
+  const motivo = prompt(`ANULAR la asistencia de hoy de:\n${nombre}\n\nEscribe el motivo:`, 'Escaneado por error');
+  if (motivo === null) return;
+  if (!motivo.trim()) { alert('El motivo es obligatorio.'); return; }
+  if (!confirm(`¿Confirmas anular a ${nombre}? Quedará con 0 hoy.`)) return;
+  try {
+    const r = await enviar({ clave: PIN, accion: 'anular', nombre, motivo: motivo.trim() });
+    if (r.exito) {
+      marcados.delete(norm(nombre));
+      mostrar('dup', r.nombre, 'Asistencia ANULADA · ' + r.hora);
+      sonido(false);
+    } else {
+      mostrar('err', nombre, r.mensaje || 'No se pudo anular');
+    }
+  } catch (e) {
+    mostrar('err', nombre, 'Sin señal: para anular se necesita internet. Intenta de nuevo.');
+  }
+  pintarListas();
+}
+
 $('tabPend').onclick = () => { $('tabPend').classList.add('act'); $('tabMarc').classList.remove('act'); $('listaPend').classList.remove('oculto'); $('listaMarc').classList.add('oculto'); };
 $('tabMarc').onclick = () => { $('tabMarc').classList.add('act'); $('tabPend').classList.remove('act'); $('listaMarc').classList.remove('oculto'); $('listaPend').classList.add('oculto'); };
 $('actualizar').onclick = refrescarLista;

@@ -1,5 +1,5 @@
 // Guarda la app en el celular para que abra aunque no haya señal en la obra.
-const CACHE = 'asistencia-gp-v2';
+const CACHE = 'asistencia-gp-v3';
 const ARCHIVOS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './logo-greenpark.png',
   'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js'];
 

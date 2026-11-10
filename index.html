@@ -3,19 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1e4620">
+<meta name="theme-color" content="#ffffff">
 <title>Asistencia GP</title>
 <link rel="manifest" href="manifest.json">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
-  :root { --verde:#1e4620; --verde2:#2e7d32; --claro:#e8f5e9; --rojo:#c62828; --ambar:#ef6c00; --gris:#f3f5f4; }
+  :root { --verde:#396647; --verde2:#58926a; --acento:#6fbc84; --claro:#e9f5ec; --rojo:#c62828; --ambar:#ef6c00; --gris:#f3f5f4; }
   * { box-sizing:border-box; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
   body { margin:0; background:var(--gris); color:#222; }
-  header { background:var(--verde); color:#fff; padding:14px 16px 12px; position:sticky; top:0; z-index:5; }
-  header h1 { margin:0; font-size:1.05rem; }
-  header .sub { font-size:.78rem; opacity:.85; margin-top:2px; display:flex; justify-content:space-between; }
+  header { background:#fff; color:#222; padding:10px 16px 8px; position:sticky; top:0; z-index:5; border-bottom:4px solid var(--acento); box-shadow:0 2px 6px rgba(0,0,0,.05); }
+  header .marca { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  header img { height:44px; width:auto; display:block; }
+  header h1 { margin:0; font-size:.95rem; color:var(--verde); text-align:right; line-height:1.15; }
+  header .sub { font-size:.78rem; color:#555; margin-top:6px; display:flex; justify-content:space-between; }
+  header #contador { font-weight:700; color:var(--verde); }
+  .logo-config { display:block; width:70%; max-width:240px; margin:4px auto 14px; }
   main { max-width:480px; margin:0 auto; padding:12px; }
   .card { background:#fff; border-radius:14px; padding:14px; box-shadow:0 2px 8px rgba(0,0,0,.06); margin-bottom:12px; }
   #reader { width:100%; border-radius:12px; overflow:hidden; background:#000; min-height:240px; }
@@ -50,13 +54,14 @@
 </head>
 <body>
 <header>
-  <h1>Control de Asistencia · Greenpark</h1>
+  <div class="marca"><img src="logo-greenpark.png" alt="Greenpark"><h1>Control de<br>Asistencia</h1></div>
   <div class="sub"><span id="hoy">—</span><span id="contador">—</span></div>
 </header>
 
 <main>
   <!-- Configuración inicial (solo la primera vez) -->
   <section id="config" class="card oculto">
+    <img class="logo-config" src="logo-greenpark.png" alt="Greenpark">
     <h2>Configurar este celular</h2>
     <label for="pinInput">PIN de la obra</label>
     <input id="pinInput" type="password" inputmode="numeric" placeholder="PIN entregado por administración">
